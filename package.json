@@ -1,0 +1,32 @@
+{
+  "name": "langfuse-prompt-manager",
+  "version": "1.0.0",
+  "private": true,
+  "main": "src/index.ts",
+  "scripts": {
+    "build": "tsc",
+    "lint": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "@types/node": "^25.9.2",
+    "ts-node": "^10.9.2",
+    "typescript": "^5.9.3"
+  },
+  "description": "",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Hamza-1997/langfuse-prompt-manager.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "bugs": {
+    "url": "https://github.com/Hamza-1997/langfuse-prompt-manager/issues"
+  },
+  "homepage": "https://github.com/Hamza-1997/langfuse-prompt-manager#readme",
+  "dependencies": {
+    "@langfuse/client": "^5.4.1",
+    "dotenv": "^17.4.2"
+  }
+}
