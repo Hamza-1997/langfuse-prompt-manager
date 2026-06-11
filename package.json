@@ -5,7 +5,14 @@
   "main": "src/index.ts",
   "scripts": {
     "build": "tsc",
-    "lint": "tsc --noEmit"
+    "lint": "tsc --noEmit",
+    "test:connection": "npx ts-node src/testConnection.ts",
+    "create:prompt": "npx ts-node src/createPrompt.ts",
+    "update:prompt": "npx ts-node src/updatePrompt.ts",
+    "get:prompt": "npx ts-node src/getPrompt.ts",
+    "get:history": "npx ts-node src/getPromptHistory.ts",
+    "restore:version": "npx ts-node src/restoreVersion.ts",
+    "simulate:production": "npx ts-node src/simulateProduction.ts"
   },
   "devDependencies": {
     "@types/node": "^25.9.2",
