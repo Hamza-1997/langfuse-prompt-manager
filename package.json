@@ -12,7 +12,8 @@
     "get:prompt": "npx ts-node src/getPrompt.ts",
     "get:history": "npx ts-node src/getPromptHistory.ts",
     "restore:version": "npx ts-node src/restoreVersion.ts",
-    "simulate:production": "npx ts-node src/simulateProduction.ts"
+    "simulate:production": "npx ts-node src/simulateProduction.ts",
+    "start": "npx ts-node src/server.ts"
   },
   "devDependencies": {
     "@types/node": "^25.9.2",

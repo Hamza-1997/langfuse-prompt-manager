@@ -1,0 +1,194 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Langfuse Prompt Manager — POC</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #f5f7fa; color: #1a1a2e; padding: 2rem; }
+    .container { max-width: 720px; margin: 0 auto; }
+    h1 { font-size: 1.25rem; font-weight: 600; margin-bottom: 0.25rem; }
+    .subtitle { font-size: 0.85rem; color: #64748b; margin-bottom: 1.5rem; }
+    .card { background: #fff; border-radius: 8px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); padding: 1.25rem; margin-bottom: 1rem; }
+    label { font-size: 0.8rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; color: #64748b; display: block; margin-bottom: 0.4rem; }
+    select { width: 100%; padding: 0.5rem 0.75rem; border: 1px solid #cbd5e1; border-radius: 6px; font-size: 0.9rem; background: #fff; }
+    select:focus { outline: none; border-color: #6366f1; box-shadow: 0 0 0 3px rgba(99,102,241,0.15); }
+    .meta { display: flex; gap: 1rem; flex-wrap: wrap; align-items: center; margin-bottom: 0.75rem; }
+    .badge { font-size: 0.75rem; padding: 0.2rem 0.6rem; border-radius: 999px; font-weight: 500; }
+    .badge-production { background: #dcfce7; color: #166534; }
+    .badge-latest { background: #dbeafe; color: #1e40af; }
+    .badge-version { background: #f1f5f9; color: #475569; }
+    textarea { width: 100%; padding: 0.75rem; border: 1px solid #cbd5e1; border-radius: 6px; font-size: 0.85rem; font-family: 'SFMono-Regular', Consolas, monospace; line-height: 1.5; resize: vertical; min-height: 120px; }
+    textarea:focus { outline: none; border-color: #6366f1; box-shadow: 0 0 0 3px rgba(99,102,241,0.15); }
+    .loading { color: #94a3b8; font-style: italic; }
+    .error { color: #dc2626; font-size: 0.85rem; }
+    .success { color: #166534; font-size: 0.85rem; }
+    .row { display: flex; justify-content: space-between; align-items: center; gap: 1rem; }
+    .status-row { display: flex; align-items: center; gap: 0.5rem; font-size: 0.8rem; color: #64748b; }
+    .dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; }
+    .dot-green { background: #22c55e; }
+    .dot-red { background: #ef4444; }
+    .btn { padding: 0.5rem 1.25rem; border: none; border-radius: 6px; font-size: 0.85rem; font-weight: 500; cursor: pointer; }
+    .btn-primary { background: #6366f1; color: #fff; }
+    .btn-primary:hover { background: #4f46e5; }
+    .btn-primary:disabled { background: #a5b4fc; cursor: not-allowed; }
+    .toast { position: fixed; bottom: 1.5rem; right: 1.5rem; padding: 0.75rem 1.25rem; border-radius: 8px; font-size: 0.85rem; font-weight: 500; opacity: 0; transform: translateY(10px); transition: opacity 0.25s, transform 0.25s; pointer-events: none; }
+    .toast-show { opacity: 1; transform: translateY(0); }
+    .toast-success { background: #dcfce7; color: #166534; border: 1px solid #86efac; }
+    .toast-error { background: #fef2f2; color: #991b1b; border: 1px solid #fecaca; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>Prompt Version Manager</h1>
+    <p class="subtitle">Langfuse POC — testpack-python-backend</p>
+
+    <div class="card">
+      <div class="status-row" id="status">
+        <span class="dot dot-green" id="statusDot"></span>
+        <span id="statusText">Connected</span>
+      </div>
+    </div>
+
+    <div class="card">
+      <label for="versionSelect">Version</label>
+      <select id="versionSelect">
+        <option value="">Loading versions...</option>
+      </select>
+    </div>
+
+    <div class="card">
+      <div class="meta">
+        <span class="badge badge-version" id="versionBadge">—</span>
+        <span class="badge badge-production" id="labelsBadge">—</span>
+      </div>
+      <textarea id="promptEditor" placeholder="Select a version to edit"></textarea>
+      <div class="row" style="margin-top: 0.75rem;">
+        <span id="saveFeedback"></span>
+        <button class="btn btn-primary" id="saveBtn" disabled>Save as new version</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="toast" class="toast"></div>
+
+  <script>
+    const PROMPT_NAME = 'testpack-python-backend'
+
+    const versionSelect = document.getElementById('versionSelect')
+    const promptEditor = document.getElementById('promptEditor')
+    const versionBadge = document.getElementById('versionBadge')
+    const labelsBadge = document.getElementById('labelsBadge')
+    const statusDot = document.getElementById('statusDot')
+    const statusText = document.getElementById('statusText')
+    const saveBtn = document.getElementById('saveBtn')
+    const saveFeedback = document.getElementById('saveFeedback')
+    const toast = document.getElementById('toast')
+
+    let versions = []
+    let currentVersion = null
+
+    function showToast(msg, type) {
+      toast.textContent = msg
+      toast.className = `toast toast-${type} toast-show`
+      setTimeout(() => toast.classList.remove('toast-show'), 3000)
+    }
+
+    async function fetchJSON(url, options) {
+      const res = await fetch(url, options)
+      if (!res.ok) {
+        const body = await res.text()
+        throw new Error(body)
+      }
+      return res.json()
+    }
+
+    function renderPrompt(prompt) {
+      currentVersion = prompt.version
+      versionBadge.textContent = `v${prompt.version}`
+      labelsBadge.textContent = prompt.labels || '(no labels)'
+      promptEditor.value = prompt.prompt
+      saveBtn.disabled = false
+      saveFeedback.textContent = ''
+    }
+
+    function showError(msg) {
+      statusDot.className = 'dot dot-red'
+      statusText.textContent = msg
+    }
+
+    async function loadVersion(version) {
+      saveBtn.disabled = true
+      saveFeedback.textContent = ''
+      try {
+        const data = await fetchJSON(`/api/prompts/${PROMPT_NAME}/${version}`)
+        renderPrompt(data)
+      } catch {
+        promptEditor.value = ''
+        saveFeedback.className = 'error'
+        saveFeedback.textContent = 'Failed to load version.'
+      }
+    }
+
+    async function loadAndPopulate() {
+      try {
+        const [meta, active] = await Promise.all([
+          fetchJSON(`/api/prompts/${PROMPT_NAME}`),
+          fetchJSON(`/api/prompts/${PROMPT_NAME}/active`),
+        ])
+
+        versions = meta.versions
+
+        versionSelect.innerHTML = ''
+        for (const v of versions) {
+          const option = document.createElement('option')
+          option.value = v
+          option.textContent = `Version ${v}${v === active.version ? ' (active)' : ''}`
+          versionSelect.appendChild(option)
+        }
+
+        renderPrompt(active)
+        versionSelect.value = active.version
+      } catch {
+        statusDot.className = 'dot dot-red'
+        statusText.textContent = 'Failed to load prompt data'
+        promptEditor.placeholder = 'Could not connect to the server.'
+      }
+    }
+
+    versionSelect.addEventListener('change', () => {
+      const v = parseInt(versionSelect.value, 10)
+      if (v) loadVersion(v)
+    })
+
+    saveBtn.addEventListener('click', async () => {
+      const text = promptEditor.value.trim()
+      if (!text) return
+
+      saveBtn.disabled = true
+      saveFeedback.className = 'loading'
+      saveFeedback.textContent = 'Saving...'
+
+      try {
+        const result = await fetchJSON(`/api/prompts/${PROMPT_NAME}`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ prompt: text }),
+        })
+
+        showToast(`Saved as version ${result.version}`, 'success')
+        await loadAndPopulate()
+        versionSelect.value = result.version
+      } catch (err) {
+        saveFeedback.className = 'error'
+        saveFeedback.textContent = 'Save failed.'
+        showToast('Failed to save prompt', 'error')
+        saveBtn.disabled = false
+      }
+    })
+
+    loadAndPopulate()
+  </script>
+</body>
+</html>
